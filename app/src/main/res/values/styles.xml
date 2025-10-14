@@ -1,0 +1,10 @@
+<resources>
+    <!-- Tema puente SOLO para actividades del SDK -->
+    <style name="Theme.LklPayDemo.AppCompatBridge" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <!-- Opcional: colores para que no se vea raro -->
+        <item name="colorPrimary">@color/purple_500</item>
+        <item name="colorPrimaryVariant">@color/purple_700</item>
+        <item name="colorOnPrimary">@android:color/white</item>
+        <item name="colorSecondary">@color/teal_200</item>
+    </style>
+</resources>
