@@ -1,4 +1,4 @@
-package com.example.lklpaysdkdemo.ui.theme
+package com.lklpay.sdkdemo.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

@@ -1,4 +1,4 @@
-package com.example.lklpaysdkdemo
+package com.lklpay.sdkdemo
 
 import org.junit.Test
 

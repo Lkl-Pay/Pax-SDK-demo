@@ -1,26 +1,42 @@
 pluginManagement {
     repositories {
-        google {
-            content {
-                includeGroupByRegex("com\\.android.*")
-                includeGroupByRegex("com\\.google.*")
-                includeGroupByRegex("androidx.*")
-            }
-        }
+        google()
         mavenCentral()
         gradlePluginPortal()
-        mavenLocal()
     }
 }
+
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         google()
         mavenCentral()
-        mavenLocal()
+
+        // Maven de LKLPay SDK
+        maven {
+            name = "LklPayPaxSdk"
+            url = uri("https://maven.pkg.github.com/Lkl-Pay/bridge-sdk-pax")
+            credentials {
+                // Usa gradle.properties o variables de entorno
+                username = providers.gradleProperty("gpr.user").orNull
+                    ?: System.getenv("GITHUB_ACTOR")
+                password = providers.gradleProperty("gpr.key").orNull
+                    ?: System.getenv("GITHUB_TOKEN")
+            }
+        }
+        // Repo donde vive el vendor A920 (payment-nexus/pax-a920sdk)
+        maven {
+            name = "GitHubPackagesA920Vendor"
+            url = uri("https://maven.pkg.github.com/payment-nexus/pax-a920sdk")
+            credentials {
+                username = providers.gradleProperty("gpr.user").orNull
+                    ?: System.getenv("GITHUB_USER")
+                password = providers.gradleProperty("gpr.key").orNull
+                    ?: System.getenv("GITHUB_TOKEN")
+            }
+        }
     }
 }
 
-rootProject.name = "LKLPay SDK Demo"
+rootProject.name = "LklPayPaxSdkDemo"
 include(":app")
- 
