@@ -8,12 +8,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,6 +21,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.ShoppingCart
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import com.lklpay.pax.sdk.LklPaySdk
@@ -58,6 +57,8 @@ private fun SdkDemoScreen() {
     // Estado de UI
     var output by remember { mutableStateOf("") }
     var isProcessing by remember { mutableStateOf(false) }
+
+    @Suppress("UNUSED_CHANGED_VALUE")
     var showDialog by remember { mutableStateOf(false) }
 
     val scrollState = rememberScrollState()
@@ -191,7 +192,7 @@ private fun SdkDemoScreen() {
                             ActionButton(
                                 label = "INIT",
                                 enabled = !isProcessing,
-                                icon = Icons.Default.PlayArrow
+                                icon = Icons.Default.Refresh
                             ) {
                                 scope.launch {
                                     isProcessing = true
@@ -400,6 +401,7 @@ private fun SdkDemoScreen() {
                     )
                 }
             }
+
 
             if (showDialog) {
                 AlertDialog(

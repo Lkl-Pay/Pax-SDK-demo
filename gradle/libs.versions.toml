@@ -1,6 +1,7 @@
 [versions]
 activityComposeVersion = "1.12.1"
 agp = "8.13.1"
+composeBomVersion = "2025.12.00"
 coreKtxVersion = "1.17.0"
 kotlin = "2.2.21"
 junit = "4.13.2"
@@ -11,6 +12,8 @@ material = "1.13.0"
 
 [libraries]
 androidx-activity-compose-v192 = { module = "androidx.activity:activity-compose", version.ref = "activityComposeVersion" }
+androidx-compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBomVersion" }
+androidx-compose-material-icons-extended = { module = "androidx.compose.material:material-icons-extended" }
 androidx-core-ktx-v1131 = { module = "androidx.core:core-ktx", version.ref = "coreKtxVersion" }
 androidx-appcompat = { module = "androidx.appcompat:appcompat", version.ref = "appcompat" }
 material = { module = "com.google.android.material:material", version.ref = "material" }
