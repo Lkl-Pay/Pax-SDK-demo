@@ -53,11 +53,13 @@ kotlin {
 dependencies {
     // SDK LKLPay PAX desde GitHub Packages
     implementation(libs.pax.sdk)
+    // SDK LKLPay PAX desde Maven Local
+    //implementation("com.lklpay:pax-sdk-dev:1.0.8-dev")
+
 
     implementation(libs.androidx.core.ktx.v1131)
     implementation(libs.androidx.lifecycle.runtime.ktx.v286)
     implementation(libs.androidx.activity.compose.v192)
-
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
@@ -68,8 +70,6 @@ dependencies {
 
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
-
-
 
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)

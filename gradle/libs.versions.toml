@@ -6,7 +6,7 @@ coreKtxVersion = "1.17.0"
 kotlin = "2.2.21"
 junit = "4.13.2"
 lifecycleRuntimeKtxVersion = "2.10.0"
-paxSdk = "1.0.2"
+paxSdk = "1.0.8-dev"
 appcompat = "1.7.1"
 material = "1.13.0"
 
@@ -26,7 +26,7 @@ androidx-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
 androidx-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
 androidx-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
-pax-sdk = { module = "com.lklpay:pax-sdk", version.ref = "paxSdk" }
+pax-sdk = { module = "com.lklpay:pax-sdk-dev", version.ref = "paxSdk" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
