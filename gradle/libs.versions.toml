@@ -6,7 +6,7 @@ coreKtxVersion = "1.17.0"
 kotlin = "2.2.21"
 junit = "4.13.2"
 lifecycleRuntimeKtxVersion = "2.10.0"
-paxSdk = "1.0.8-dev"
+paxSdk = "1.0.9-dev"
 appcompat = "1.7.1"
 material = "1.13.0"
 

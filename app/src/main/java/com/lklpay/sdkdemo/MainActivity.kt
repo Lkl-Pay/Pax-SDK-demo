@@ -10,6 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,7 +27,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Print
@@ -36,8 +37,8 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -58,9 +59,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -68,28 +67,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
+import com.lklpay.bridge.utils.PreferenceManager
 import com.lklpay.pax.sdk.LklPaySdk
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.Locale
-import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.padding
 
-
-/**
- * LKLPay SDK Demo (PAX)
- *
- * Objetivo:
- * - Herramienta para developers: cada método tiene su sección:
- *   inputs + botón + ejemplo + salida.
- * - Incluye un panel superior "SDK Status" para debugging rápido.
- *
- * Nota:
- * - Esta demo guarda el status en memoria (UI).
- * - Si luego quieres status persistente, lo ideal es exponer getStatus() en el SDK.
- */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -127,6 +114,49 @@ private fun maskApiKey(apiKey: String?): String {
     return apiKey.take(8) + "••••••••" + tail
 }
 
+/**
+ * Limpieza TOTAL como el test de INIT:
+ * Evita 401 por token/apiKey viejos y deja la TPV lista para un INIT REAL limpio.
+ */
+private fun resetSdkCreds(prefs: PreferenceManager) {
+    prefs.setApiKey("")
+    prefs.setTokenLKL("")
+    prefs.setLklTokenExpiration(0L)
+    prefs.setEwToken("")
+    prefs.setEsToken("")
+    prefs.setSerialNumber("")
+    prefs.setPIN("")
+    prefs.setTokenDate("")
+}
+
+private fun loadStatusFromPrefs(
+    prefs: PreferenceManager,
+    dev: Boolean,
+    lastInitAt: Long? = null,
+    lastAction: String? = null,
+    lastActionAt: Long? = null,
+    lastActionOk: Boolean? = null,
+    lastActionMessage: String? = null
+): SdkStatus {
+    val serial = prefs.getSerialNumber()?.takeIf { it.isNotBlank() }
+    val apiKey = prefs.getApiKey()?.takeIf { it.isNotBlank() }
+
+    // Ready “real”: al menos serial + apiKey (ajústalo si tu criterio es otro)
+    val ready = !serial.isNullOrBlank() && !apiKey.isNullOrBlank()
+
+    return SdkStatus(
+        mode = if (dev) "DEV" else "REAL",
+        ready = ready,
+        lastInitAt = lastInitAt,
+        serial = serial,
+        apiKey = apiKey,
+        lastAction = lastAction,
+        lastActionAt = lastActionAt,
+        lastActionOk = lastActionOk,
+        lastActionMessage = lastActionMessage
+    )
+}
+
 /* ---------------------------------------------------------------------------------------------
  *  UI
  * --------------------------------------------------------------------------------------------- */
@@ -136,8 +166,9 @@ private fun maskApiKey(apiKey: String?): String {
 private fun SdkDemoScreen() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val clipboard = LocalClipboardManager.current
     val scroll = rememberScrollState()
+
+    val prefs = remember { PreferenceManager(context) }
 
     // Global config
     var dev by remember { mutableStateOf(false) }
@@ -178,21 +209,33 @@ private fun SdkDemoScreen() {
 
     // Output / UX
     var output by remember { mutableStateOf("") }
-    var isProcessing by remember { mutableStateOf(false) }
     var showDialog by remember { mutableStateOf(false) }
+
+    // Processing overlay (con mensaje)
+    var isProcessing by remember { mutableStateOf(false) }
+    var processingLabel by remember { mutableStateOf("Procesando…") }
 
     // SDK Status
     var status by remember {
-        mutableStateOf(
-            SdkStatus(
-                mode = if (dev) "DEV" else "REAL",
-                ready = false
-            )
+        mutableStateOf(loadStatusFromPrefs(prefs, dev = dev))
+    }
+
+    // Refresca status al cambiar dev
+    LaunchedEffect(dev) {
+        status = loadStatusFromPrefs(
+            prefs = prefs,
+            dev = dev,
+            lastInitAt = status.lastInitAt,
+            lastAction = status.lastAction,
+            lastActionAt = status.lastActionAt,
+            lastActionOk = status.lastActionOk,
+            lastActionMessage = status.lastActionMessage
         )
     }
 
-    LaunchedEffect(dev) {
-        status = status.copy(mode = if (dev) "DEV" else "REAL")
+    // Refresca panel al entrar (por si ya había INIT previo)
+    LaunchedEffect(Unit) {
+        status = loadStatusFromPrefs(prefs, dev = dev)
     }
 
     val requestWritePerm = rememberLauncherForActivityResult(
@@ -227,30 +270,23 @@ private fun SdkDemoScreen() {
                 // -------------------- SDK Status Panel --------------------
                 SdkStatusPanel(
                     status = status,
-                    onCopySerial = {
-                        val s = status.serial ?: return@SdkStatusPanel
-                        clipboard.setText(AnnotatedString(s))
-                        output = "Copiado Serial: $s"
-                        showDialog = true
-                    },
-                    onCopyApiKey = {
-                        val k = status.apiKey ?: return@SdkStatusPanel
-                        clipboard.setText(AnnotatedString(k))
-                        output = "Copiado ApiKey."
+                    onReload = {
+                        status = loadStatusFromPrefs(
+                            prefs = prefs,
+                            dev = dev,
+                            lastInitAt = status.lastInitAt,
+                            lastAction = status.lastAction,
+                            lastActionAt = status.lastActionAt,
+                            lastActionOk = status.lastActionOk,
+                            lastActionMessage = status.lastActionMessage
+                        )
+                        output = "Status recargado desde prefs."
                         showDialog = true
                     },
                     onReset = {
-                        status = status.copy(
-                            ready = false,
-                            lastInitAt = null,
-                            serial = null,
-                            apiKey = null,
-                            lastAction = null,
-                            lastActionAt = null,
-                            lastActionOk = null,
-                            lastActionMessage = null
-                        )
-                        output = "SDK Status reseteado (UI)."
+                        resetSdkCreds(prefs)
+                        status = loadStatusFromPrefs(prefs, dev = dev)
+                        output = "Credenciales reseteadas (prefs limpiadas como el test de INIT)."
                         showDialog = true
                     }
                 )
@@ -289,16 +325,17 @@ private fun SdkDemoScreen() {
                 // -------------------- INIT --------------------
                 SectionCard(
                     title = "INIT",
-                    subtitle = "Inicializa la TPV. En REAL: obtiene serial, sesión y llaves."
+                    subtitle = "Inicializa la TPV. En REAL: obtiene serial, sesión y llaves. Aquí hacemos reset antes para evitar 401."
                 ) {
                     PrimaryActionButton(
-                        label = "Ejecutar INIT",
+                        label = "Ejecutar INIT (con reset)",
                         enabled = !isProcessing,
                         icon = Icons.Default.Refresh
                     ) {
                         scope.launch {
                             safeAction(
-                                setProcessing = { isProcessing = it },
+                                setProcessing = { on -> isProcessing = on },
+                                setProcessingLabel = { processingLabel = it },
                                 setOutput = { output = it },
                                 setDialog = { showDialog = it },
                                 onStatus = { ok, msg ->
@@ -308,25 +345,35 @@ private fun SdkDemoScreen() {
                                         lastActionOk = ok,
                                         lastActionMessage = msg
                                     )
-                                }
+                                },
+                                processingMsg = "Inicializando (INIT)…",
+                                timeoutMs = 180_000L
                             ) {
+                                if (!dev) {
+                                    resetSdkCreds(prefs) // 🔥 clave: evita 401 por tokens/apiKey viejos
+                                }
+
                                 val res = LklPaySdk.init(
                                     context = context,
-                                    config = LklPaySdk.InitConfig(useDev = dev, masterPin = masterPin.trim())
+                                    config = LklPaySdk.InitConfig(
+                                        useDev = dev,
+                                        masterPin = masterPin.trim()
+                                    )
                                 )
 
                                 res.fold(
                                     onSuccess = { r ->
-                                        status = status.copy(
-                                            ready = true,
+                                        // Después de INIT, recarga desde prefs reales
+                                        val refreshed = loadStatusFromPrefs(
+                                            prefs = prefs,
+                                            dev = dev,
                                             lastInitAt = nowMs(),
-                                            serial = r.serial,
-                                            apiKey = r.apiKey,
                                             lastAction = "INIT",
                                             lastActionAt = nowMs(),
                                             lastActionOk = true,
                                             lastActionMessage = r.message
                                         )
+                                        status = refreshed
 
                                         buildString {
                                             appendLine("INIT OK")
@@ -391,6 +438,7 @@ private fun SdkDemoScreen() {
                         scope.launch {
                             safeAction(
                                 setProcessing = { isProcessing = it },
+                                setProcessingLabel = { processingLabel = it },
                                 setOutput = { output = it },
                                 setDialog = { showDialog = it },
                                 onStatus = { ok, msg ->
@@ -400,7 +448,8 @@ private fun SdkDemoScreen() {
                                         lastActionOk = ok,
                                         lastActionMessage = msg
                                     )
-                                }
+                                },
+                                processingMsg = "Procesando SALE…"
                             ) {
                                 val amt = amountCents.toLongOrNull() ?: 0L
                                 require(amt > 0) { "Monto inválido" }
@@ -452,6 +501,7 @@ private fun SdkDemoScreen() {
                             scope.launch {
                                 safeAction(
                                     setProcessing = { isProcessing = it },
+                                    setProcessingLabel = { processingLabel = it },
                                     setOutput = { output = it },
                                     setDialog = { showDialog = it },
                                     onStatus = { ok, msg ->
@@ -461,7 +511,8 @@ private fun SdkDemoScreen() {
                                             lastActionOk = ok,
                                             lastActionMessage = msg
                                         )
-                                    }
+                                    },
+                                    processingMsg = "Procesando CANCEL…"
                                 ) {
                                     val tx = originalTxnId.trim()
                                     require(tx.isNotBlank()) { "TxnId requerido" }
@@ -489,6 +540,7 @@ private fun SdkDemoScreen() {
                             scope.launch {
                                 safeAction(
                                     setProcessing = { isProcessing = it },
+                                    setProcessingLabel = { processingLabel = it },
                                     setOutput = { output = it },
                                     setDialog = { showDialog = it },
                                     onStatus = { ok, msg ->
@@ -498,7 +550,8 @@ private fun SdkDemoScreen() {
                                             lastActionOk = ok,
                                             lastActionMessage = msg
                                         )
-                                    }
+                                    },
+                                    processingMsg = "Procesando REFUND…"
                                 ) {
                                     val tx = originalTxnId.trim()
                                     require(tx.isNotBlank()) { "TxnId requerido" }
@@ -523,7 +576,7 @@ private fun SdkDemoScreen() {
                 // -------------------- PRINT (P52) --------------------
                 SectionCard(
                     title = "PRINT_TEXT (P52)",
-                    subtitle = "Imprime texto plano. Usa fuente default del SDK (evita error de font)."
+                    subtitle = "Imprime texto plano."
                 ) {
                     OutlinedTextField(
                         value = printText,
@@ -543,6 +596,7 @@ private fun SdkDemoScreen() {
                         scope.launch {
                             safeAction(
                                 setProcessing = { isProcessing = it },
+                                setProcessingLabel = { processingLabel = it },
                                 setOutput = { output = it },
                                 setDialog = { showDialog = it },
                                 onStatus = { ok, msg ->
@@ -552,7 +606,8 @@ private fun SdkDemoScreen() {
                                         lastActionOk = ok,
                                         lastActionMessage = msg
                                     )
-                                }
+                                },
+                                processingMsg = "Imprimiendo texto…"
                             ) {
                                 val res = LklPaySdk.print(
                                     context = context,
@@ -571,7 +626,7 @@ private fun SdkDemoScreen() {
 
                 SectionCard(
                     title = "PRINT_JSON (P52)",
-                    subtitle = "Imprime usando JSON (si tu Bridge interpreta JSON para layout)."
+                    subtitle = "Imprime usando JSON."
                 ) {
                     OutlinedTextField(
                         value = printJson,
@@ -591,6 +646,7 @@ private fun SdkDemoScreen() {
                         scope.launch {
                             safeAction(
                                 setProcessing = { isProcessing = it },
+                                setProcessingLabel = { processingLabel = it },
                                 setOutput = { output = it },
                                 setDialog = { showDialog = it },
                                 onStatus = { ok, msg ->
@@ -600,7 +656,8 @@ private fun SdkDemoScreen() {
                                         lastActionOk = ok,
                                         lastActionMessage = msg
                                     )
-                                }
+                                },
+                                processingMsg = "Imprimiendo JSON…"
                             ) {
                                 val res = LklPaySdk.print(
                                     context = context,
@@ -620,7 +677,7 @@ private fun SdkDemoScreen() {
                 // -------------------- PRINT IMAGE (P53) --------------------
                 SectionCard(
                     title = "PRINT_IMAGE (P53)",
-                    subtitle = "Convierte Base64 a archivo en /sdcard/appPax/ y manda P53."
+                    subtitle = "Convierte Base64 a archivo y manda P53."
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -666,7 +723,9 @@ private fun SdkDemoScreen() {
                         onValueChange = { imageBase64 = it },
                         label = { Text("Base64 (png/jpg). Puede incluir data:image/...") },
                         maxLines = 8,
-                        modifier = Modifier.fillMaxWidth().height(140.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(140.dp)
                     )
 
                     Spacer(Modifier.height(10.dp))
@@ -679,6 +738,7 @@ private fun SdkDemoScreen() {
                         scope.launch {
                             safeAction(
                                 setProcessing = { isProcessing = it },
+                                setProcessingLabel = { processingLabel = it },
                                 setOutput = { output = it },
                                 setDialog = { showDialog = it },
                                 onStatus = { ok, msg ->
@@ -688,7 +748,8 @@ private fun SdkDemoScreen() {
                                         lastActionOk = ok,
                                         lastActionMessage = msg
                                     )
-                                }
+                                },
+                                processingMsg = "Imprimiendo imagen…"
                             ) {
                                 if (!dev) requestWritePerm.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
 
@@ -717,7 +778,7 @@ private fun SdkDemoScreen() {
 
                     Spacer(Modifier.height(8.dp))
 
-                    Divider()
+                    HorizontalDivider()
 
                     Text("Atajo útil: imprimir QR", fontWeight = FontWeight.SemiBold)
                     Text("Genera un QR con https://paymentnexus.com.mx y lo imprime.", style = MaterialTheme.typography.bodySmall)
@@ -732,6 +793,7 @@ private fun SdkDemoScreen() {
                         scope.launch {
                             safeAction(
                                 setProcessing = { isProcessing = it },
+                                setProcessingLabel = { processingLabel = it },
                                 setOutput = { output = it },
                                 setDialog = { showDialog = it },
                                 onStatus = { ok, msg ->
@@ -741,7 +803,8 @@ private fun SdkDemoScreen() {
                                         lastActionOk = ok,
                                         lastActionMessage = msg
                                     )
-                                }
+                                },
+                                processingMsg = "Imprimiendo QR…"
                             ) {
                                 if (!dev) requestWritePerm.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
 
@@ -792,7 +855,7 @@ private fun SdkDemoScreen() {
                 )
             }
 
-            // Procesando
+            // Procesando (overlay con texto)
             if (isProcessing) {
                 AlertDialog(
                     onDismissRequest = {},
@@ -802,7 +865,9 @@ private fun SdkDemoScreen() {
                         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                             CircularProgressIndicator()
                             Spacer(Modifier.height(12.dp))
-                            Text("No cierres esta pantalla…")
+                            Text(processingLabel)
+                            Spacer(Modifier.height(6.dp))
+                            Text("No cierres esta pantalla…", style = MaterialTheme.typography.bodySmall)
                         }
                     },
                     properties = DialogProperties(dismissOnClickOutside = false)
@@ -831,7 +896,7 @@ private fun SectionCard(
             if (!subtitle.isNullOrBlank()) {
                 Text(subtitle, style = MaterialTheme.typography.bodySmall)
             }
-            Divider()
+            HorizontalDivider()
             content()
         }
     }
@@ -861,8 +926,7 @@ private fun PrimaryActionButton(
 @Composable
 private fun SdkStatusPanel(
     status: SdkStatus,
-    onCopySerial: (() -> Unit)? = null,
-    onCopyApiKey: (() -> Unit)? = null,
+    onReload: (() -> Unit)? = null,
     onReset: (() -> Unit)? = null
 ) {
     val pillColor = if (status.ready) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error
@@ -911,14 +975,14 @@ private fun SdkStatusPanel(
 
                 Spacer(Modifier.weight(1f))
 
-                if (onReset != null) {
-                    IconButton(onClick = onReset) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Reset status")
+                if (onReload != null) {
+                    IconButton(onClick = onReload) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Reload")
                     }
                 }
             }
 
-            Divider()
+            HorizontalDivider()
 
             Text("SDK Status", style = MaterialTheme.typography.titleMedium)
 
@@ -930,23 +994,16 @@ private fun SdkStatusPanel(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                if (onCopySerial != null) {
+                // ✅ Quitados botones de copy
+                if (onReset != null) {
                     AssistChip(
-                        onClick = onCopySerial,
-                        label = { Text("Copiar Serial") },
-                        leadingIcon = { Icon(Icons.Default.ContentCopy, null) }
-                    )
-                }
-                if (onCopyApiKey != null) {
-                    AssistChip(
-                        onClick = onCopyApiKey,
-                        label = { Text("Copiar ApiKey") },
-                        leadingIcon = { Icon(Icons.Default.ContentCopy, null) }
+                        onClick = onReset,
+                        label = { Text("Reset creds") }
                     )
                 }
             }
 
-            Divider()
+            HorizontalDivider()
 
             Text("Última operación", fontWeight = FontWeight.SemiBold)
             InfoRow("Action", status.lastAction ?: "—")
@@ -971,33 +1028,41 @@ private fun InfoRow(label: String, value: String) {
 }
 
 /* ---------------------------------------------------------------------------------------------
- *  Safe action runner
+ *  Safe action runner (con overlay y mensaje)
  * --------------------------------------------------------------------------------------------- */
 
 private suspend fun safeAction(
     setProcessing: (Boolean) -> Unit,
+    setProcessingLabel: (String) -> Unit,
     setOutput: (String) -> Unit,
     setDialog: (Boolean) -> Unit,
     onStatus: (ok: Boolean, msg: String) -> Unit,
+    processingMsg: String,
+    timeoutMs: Long = 120_000L,
     block: suspend () -> String
 ) {
+    setProcessingLabel(processingMsg)
     setProcessing(true)
     setOutput("")
     setDialog(false)
 
-    val resultText = try {
-        val txt = block()
+    try {
+        val txt = withTimeout(timeoutMs) { block() }
         onStatus(true, "OK")
-        txt
+        setOutput(txt)
+        setDialog(true)
+    } catch (t: TimeoutCancellationException) {
+        onStatus(false, "timeout")
+        setOutput("ERROR: Timeout (${timeoutMs / 1000}s). Posible bloqueo en SDK vendor (Z10/Z11/C14).")
+        setDialog(true)
     } catch (t: Throwable) {
         val msg = t.message ?: "desconocido"
         onStatus(false, msg)
-        "ERROR: $msg"
+        setOutput("ERROR: $msg")
+        setDialog(true)
+    } finally {
+        setProcessing(false)
     }
-
-    setOutput(resultText)
-    setProcessing(false)
-    setDialog(true)
 }
 
 /* ---------------------------------------------------------------------------------------------
