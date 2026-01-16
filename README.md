@@ -1,7 +1,17 @@
+
 # LKLPay PAX SDK · Demo App
 
-Este repositorio contiene una aplicación **demo** para probar e integrar el **LKLPay PAX SDK** en dispositivos PAX (por ejemplo, A920).  
-El objetivo es mostrar, de forma sencilla, cómo consumir el SDK desde una app Android usando Kotlin y Jetpack Compose.
+Este repositorio contiene una aplicación **demo** para probar e integrar el **LKLPay PAX SDK** en dispositivos **PAX** (por ejemplo, **A920**).  
+El objetivo es mostrar, de forma sencilla y directa, cómo consumir el SDK desde una app Android usando **Kotlin** y **Jetpack Compose**.
+
+---
+
+## Objetivo del demo
+
+- Mostrar cómo consumir el SDK desde Android sin lógica adicional.
+- Permitir pruebas rápidas de los flujos principales.
+- Facilitar debug y validación en modo **DEV** y **REAL**.
+- Servir como base de referencia para integraciones reales.
 
 ---
 
@@ -9,19 +19,31 @@ El objetivo es mostrar, de forma sencilla, cómo consumir el SDK desde una app A
 
 La app permite probar los principales flujos del SDK:
 
-- `INIT`  
-- `DO_SALE` (venta)  
-- `DO_CANCEL` (cancelación)  
-- `DO_REFUND` (devolución)  
-- `PRINT` (impresión simple)
+- `INIT`
+- `SALE` (venta)
+- `CANCEL` (cancelación)
+- `REFUND` (devolución)
+- `PRINT_TEXT` (P52 – texto / JSON)
+- `PRINT_IMAGE` (P53 – imagen Base64 / QR)
 
 Además, incluye:
 
 - Modo **DEV** (simulado, sin cobros reales).
-- Modo **REAL** (usa el flujo completo: sesión, llaves, backend, dispositivo).
-- UI simple en Jetpack Compose para:
-  - Configurar parámetros (monto, referencia, TxnId original, texto a imprimir).
-  - Ejecutar acciones y ver el resultado en pantalla.
+- Modo **REAL** (flujo completo: sesión, llaves, backend y dispositivo).
+- Panel de **SDK Status**:
+  - Modo actual (DEV / REAL)
+  - Estado `READY / NOT READY`
+  - Serial
+  - ApiKey (enmascarada)
+  - Última acción ejecutada
+- Botón **Reset creds**:
+  - Limpia completamente `SharedPreferences`
+  - Equivalente al reset usado en el test de `INIT`
+  - Evita errores comunes como `401` por tokens viejos
+- UI en **Jetpack Compose** con feedback visual:
+  - Loader bloqueante durante operaciones
+  - Timeout controlado
+  - Resultado detallado por acción
 
 ---
 
@@ -30,7 +52,7 @@ Además, incluye:
 - **Android Studio** (Iguana o superior recomendado).
 - **Gradle** con soporte para Kotlin DSL.
 - **Kotlin** 1.9+.
-- Dispositivo PAX compatible (ej. **PAX A920**) para pruebas en modo REAL.
+- Dispositivo **PAX compatible** (ej. **PAX A920**) para pruebas en modo REAL.
 - Acceso al **Maven privado** donde se publica el AAR del SDK.
 
 ---
@@ -39,7 +61,7 @@ Además, incluye:
 
 ### 1. Repositorio Maven privado
 
-En tu proyecto (a nivel `settings.gradle` o `build.gradle` raíz), asegúrate de tener configurado el repositorio Maven privado donde vive el AAR del SDK:
+En tu proyecto (a nivel `settings.gradle` o `build.gradle` raíz), configura el repositorio Maven privado donde se publica el SDK:
 
 ```kotlin
 dependencyResolutionManagement {
@@ -58,11 +80,13 @@ dependencyResolutionManagement {
 }
 ````
 
-> Ajusta la URL y credenciales a tu entorno real.
+> Ajusta la URL y credenciales según tu entorno.
+
+---
 
 ### 2. Dependencia del SDK
 
-En el módulo de la app demo (por defecto `app/build.gradle.kts`):
+En el módulo de la app demo (`app/build.gradle.kts`):
 
 ```kotlin
 dependencies {
@@ -70,45 +94,62 @@ dependencies {
 }
 ```
 
-Reemplaza `<VERSION>` por la versión actual del SDK (ej. `1.0.0`).
+Ejemplo:
+
+```kotlin
+implementation("com.lklpay.pax:sdk:1.0.8")
+```
+
+o versión de desarrollo:
+
+```kotlin
+implementation("com.lklpay.pax:sdk:1.0.8-dev")
+```
 
 ---
 
 ## Estructura del proyecto
 
-* `app/src/main/java/com/lklpay/sdkdemo/MainActivity.kt`
-  Contiene la pantalla principal del demo y la integración directa con `LklPaySdk`.
+```
+app/
+ └─ src/main/java/com/lklpay/sdkdemo/
+    └─ MainActivity.kt
+```
 
-* Dependencias principales:
+**MainActivity.kt** contiene:
 
-    * `com.lklpay.pax.sdk.LklPaySdk`
-    * Jetpack Compose (Material 3)
-    * Kotlin Coroutines (para manejo de llamados `suspend` del SDK)
+* La UI del demo (Jetpack Compose)
+* Llamadas directas a `LklPaySdk`
+* Manejo de estado, loading y resultados
+* Reset de credenciales
+* Ejemplos reales de uso del SDK
+
+Dependencias principales:
+
+* `com.lklpay.pax.sdk.LklPaySdk`
+* Jetpack Compose (Material 3)
+* Kotlin Coroutines (manejo de funciones `suspend`)
 
 ---
 
 ## Flujo típico en el demo
 
-1. **Abrir la app demo** en el dispositivo.
-2. En la sección **Configuración**:
+1. Abrir la app demo en el dispositivo.
+2. En **Configuración global**:
 
-    * Activar o desactivar el checkbox **Modo DEV**.
-    * Ingresar `Master PIN` (ej. `123456`).
-    * Definir `Amount (cents)` (ej. `100` para $1.00).
-    * Definir `Reference` (opcional).
-    * Definir `Original TxnId` para probar `CANCEL` o `REFUND`.
-    * Definir el `Print text` para el flujo de impresión.
-3. Usar los botones en la sección **Acciones**:
+    * Activar o desactivar **Modo DEV**
+    * Ingresar **Master PIN** (ej. `123456`)
+3. Ejecutar **INIT** (recomendado siempre al inicio).
+4. Probar:
 
-    * `INIT`
-    * `DO_SALE`
-    * `DO_CANCEL`
-    * `DO_REFUND`
-    * `PRINT`
-4. Ver el resultado en:
+    * `SALE` ingresando monto y referencia
+    * `CANCEL` o `REFUND` usando un `txnId` previo
+    * `PRINT_TEXT` o `PRINT_IMAGE`
+5. Revisar el resultado en:
 
-    * El card de **"Último resultado"**.
-    * El diálogo de resultado que se abre al finalizar cada acción.
+    * Panel **Último resultado**
+    * Diálogo de resultado
+    * Panel **SDK Status**
 
 ---
 
@@ -116,53 +157,54 @@ Reemplaza `<VERSION>` por la versión actual del SDK (ej. `1.0.0`).
 
 ### Modo DEV
 
-* No se hacen llamadas reales al SDK del dispositivo ni a la pasarela real.
-* Los flujos (`INIT`, `SALE`, `CANCEL`, `REFUND`, `PRINT`) se simulan.
-* El SDK genera datos falsos:
+* No se hacen llamadas reales al SDK del dispositivo.
+* No hay llamadas reales al backend.
+* El SDK **simula**:
 
-    * Serial genérico (ej. `1234567890`).
-    * Tokens y apiKey simulados.
-    * Transacciones aprobadas con códigos fake.
+    * Serial genérico (ej. `1234567890`)
+    * Tokens y ApiKey falsos
+    * Transacciones aprobadas con datos simulados
 
 Ideal para:
 
-* Probar la integración del SDK.
-* Validar flujos en UI sin necesidad de conexión a backend o llaves reales.
+* QA sin hardware.
+* Desarrollo de UI.
+* Validar flujos sin llaves ni backend.
+
+---
 
 ### Modo REAL
 
-* Ejecuta el flujo real del SDK:
+* Ejecuta el flujo completo del SDK:
 
-    * Inicialización del `DeviceController`.
-    * Envío de comandos (`Z10`, `Z11`, `C14`, `C51`, `C54`, etc.).
-    * Sincronización de llaves con el backend.
-    * Uso de `SessionManager` y `KeySyncManager`.
-    * Llamadas reales a `TransactionsBridge`.
+    * Inicialización del dispositivo
+    * Envío de comandos internos PAX (ej. `Z10`, `Z11`, `C14`, `C51`, `C54`)
+    * Sincronización de llaves con el backend
+    * Manejo de sesión
+    * Transacciones reales
 
 Requiere:
 
 * Dispositivo PAX correctamente provisionado.
 * Backend y llaves configuradas.
-* Acceso a la red adecuada.
+* Acceso a red adecuado.
 
 ---
 
-## Uso del SDK (ejemplos de código)
-
-A continuación se muestran ejemplos simplificados basados en el código del demo.
+## Uso del SDK (ejemplos)
 
 ### INIT
 
 ```kotlin
 val cfg = LklPaySdk.InitConfig(
-    useDev = dev,               // true = modo DEV, false = REAL
+    useDev = dev,
     masterPin = masterPin.trim()
 )
 
 val result = LklPaySdk.init(context, cfg)
+
 result.fold(
     onSuccess = { r ->
-        // Ejemplo de uso del resultado
         // r.devMode, r.serial, r.apiKey, r.message
     },
     onFailure = { e ->
@@ -170,6 +212,8 @@ result.fold(
     }
 )
 ```
+
+---
 
 ### SALE
 
@@ -192,15 +236,9 @@ val cfg = LklPaySdk.SaleConfig(
 )
 
 val result = LklPaySdk.sale(context, cfg)
-result.fold(
-    onSuccess = { txn ->
-        // txn.approved, txn.message, txn.txnId, txn.authCode, etc.
-    },
-    onFailure = { e ->
-        // Manejo de error
-    }
-)
 ```
+
+---
 
 ### CANCEL
 
@@ -212,15 +250,9 @@ val cfg = LklPaySdk.CancelConfig(
 )
 
 val result = LklPaySdk.cancel(context, cfg)
-result.fold(
-    onSuccess = { txn ->
-        // Resultado de la cancelación
-    },
-    onFailure = { e ->
-        // Manejo de error
-    }
-)
 ```
+
+---
 
 ### REFUND
 
@@ -232,73 +264,77 @@ val cfg = LklPaySdk.RefundConfig(
 )
 
 val result = LklPaySdk.refund(context, cfg)
-result.fold(
-    onSuccess = { txn ->
-        // Resultado de la devolución
-    },
-    onFailure = { e ->
-        // Manejo de error
-    }
-)
 ```
 
-### PRINT
+---
+
+### PRINT (P52)
 
 ```kotlin
 val printResult = LklPaySdk.print(
     context = context,
-    text = "Ticket de prueba\nLklPay SDK",
+    text = "Ticket de prueba\nLKLPay SDK",
     json = null,
     useDev = dev
 )
+```
 
-printResult.fold(
-    onSuccess = {
-        // PRINT OK
-    },
-    onFailure = { e ->
-        // Manejo de error
-    }
+---
+
+### PRINT IMAGE / QR (P53)
+
+```kotlin
+val cfg = LklPaySdk.PrintImageConfig(
+    imageBase64 = base64Png,
+    fileName = "qr.png",
+    alignment = LklPaySdk.ImageAlign.CENTER,
+    useDev = dev,
+    await = true
 )
+
+LklPaySdk.printImage(context, cfg)
 ```
 
 ---
 
 ## Manejo de errores
 
-Todas las funciones `suspend` del SDK devuelven un `Result<T>`:
-
-* En caso de éxito → `onSuccess(result: T)`
-* En caso de error → `onFailure(error: Throwable)`
-
-Ejemplo genérico:
+Todas las funciones del SDK retornan `Result<T>`:
 
 ```kotlin
 val res = LklPaySdk.sale(context, cfg)
 
 res.fold(
     onSuccess = { txn ->
-        // Lógica de éxito
+        // Éxito
     },
     onFailure = { e ->
-        // e.message, e::class.simpleName, etc.
+        // e.message, e::class.simpleName
     }
 )
 ```
+
+La demo además maneja:
+
+* Timeout explícito
+* Bloqueo de UI durante operaciones
+* Reset de estado con **Reset creds**
 
 ---
 
 ## Notas y buenas prácticas
 
-* Se recomienda ejecutar **INIT** al inicio de la sesión o cuando la app se abra por primera vez.
+* Ejecutar **INIT** al iniciar la app o sesión.
+* Usar **Reset creds** si hay errores de autenticación.
 * En producción, usar siempre `useDev = false`.
-* Validar siempre `amountCents > 0` antes de llamar a `sale`.
-* Guardar y reutilizar `txnId` para permitir operaciones de `CANCEL` y `REFUND`.
-* El modo DEV está pensado solo para pruebas, nunca para entornos productivos.
+* Validar siempre `amountCents > 0` antes de `SALE`.
+* Guardar el `txnId` para `CANCEL` y `REFUND`.
+* El modo DEV es solo para pruebas, nunca para producción.
 
 ---
 
 ## Licencia
 
-Este demo y el SDK asociado son propiedad de **LKLPay**.
+Este demo y el **LKLPay PAX SDK** son propiedad de **LKLPay**.
 Su uso está restringido a integraciones autorizadas y/o entornos de prueba acordados con LKLPay.
+
